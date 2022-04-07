@@ -1,5 +1,5 @@
 class Todo {
-  Todo({
+  const Todo({
     required this.uid,
     // required this.assigned,
     required this.name,
