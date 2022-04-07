@@ -15,6 +15,11 @@ abstract class TodoRepository {
     required String description,
   });
 
+  void deleteTodo({
+    required String list,
+    required String uid,
+  });
+
   List<Todo> findTodos(String todoList);
 
   Stream<List<Todo>> streamTodos(String todoList);
@@ -49,10 +54,19 @@ class InMemTodoRepository implements TodoRepository {
     required String description,
   }) {
     _todoLists[list]?.todos.add(Todo(
-          uid: random.string(24),
-          name: name,
-          description: description,
-        ));
+      uid: random.string(24),
+      name: name,
+      description: description,
+    ));
+    _streams[list]?.sink.add(_todoLists[list]!.todos);
+  }
+
+  @override
+  void deleteTodo({
+    required String list,
+    required String uid,
+  }){
+    _todoLists[list]?.todos.removeWhere((todo) => todo.uid == uid);
     _streams[list]?.sink.add(_todoLists[list]!.todos);
   }
 
@@ -66,7 +80,8 @@ class InMemTodoRepository implements TodoRepository {
     if (_todoLists.containsKey(todoList)) {
       _streams.putIfAbsent(todoList, () {
         var streamController = StreamController<List<Todo>>.broadcast();
-        streamController.onListen = () => streamController.sink.add(_todoLists[todoList]!.todos);
+        streamController.onListen =
+            () => streamController.sink.add(_todoLists[todoList]!.todos);
         return streamController;
       });
       return _streams[todoList]!.stream;
@@ -78,10 +93,9 @@ class InMemTodoRepository implements TodoRepository {
 
 class FirestoreTodoRepository implements TodoRepository {
   @override
-  void createTodo(
-      {required String list,
-      required String name,
-      required String description}) {
+  void createTodo({required String list,
+    required String name,
+    required String description}) {
     FirebaseFirestore.instance
         .collection('todo-lists')
         .doc(list)
@@ -90,6 +104,18 @@ class FirestoreTodoRepository implements TodoRepository {
       'name': name,
       'description': description,
     });
+  }
+
+  @override
+  void deleteTodo({
+    required String list,
+    required String uid,
+  }){
+    FirebaseFirestore.instance
+        .collection('todo-lists')
+        .doc(list)
+        .collection('todos')
+        .doc(uid).delete();
   }
 
   @override
@@ -103,7 +129,7 @@ class FirestoreTodoRepository implements TodoRepository {
   @override
   Stream<List<String>> streamTodoLists() {
     return FirebaseFirestore.instance.collection('todo-lists').snapshots().map(
-        (snap) =>
+            (snap) =>
             snap.docs.map((e) => e.data()['name'] as String? ?? e.id).toList());
   }
 
@@ -119,14 +145,16 @@ class FirestoreTodoRepository implements TodoRepository {
         .doc(uid)
         .collection('todos')
         .withConverter<Todo>(
-          fromFirestore: (snapshot, options) => Todo.fromJson(
+      fromFirestore: (snapshot, options) =>
+          Todo.fromJson(
             {
               'uid': snapshot.id,
-            }..addAll(snapshot.data()!),
+            }
+              ..addAll(snapshot.data()!),
           ),
-          toFirestore: (todo, options) =>
-              {todo.uid: todo.toJson().remove('uid')},
-        )
+      toFirestore: (todo, options) =>
+      {todo.uid: todo.toJson().remove('uid')},
+    )
         .snapshots()
         .map((event) => event.docs.map((doc) => doc.data()).toList());
   }
