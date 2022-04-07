@@ -1,8 +1,16 @@
+import 'package:faker/faker.dart';
+import 'package:firebase_core/firebase_core.dart';
 import 'package:flutter/material.dart';
-import 'package:my_first_flutter_app/domain/index.dart';
-import 'package:my_first_flutter_app/todo_tile.dart';
+import 'package:my_first_flutter_app/create_todo_page.dart';
+import 'package:my_first_flutter_app/domain/repository.dart';
+import 'package:my_first_flutter_app/firebase_options.dart';
+import 'package:my_first_flutter_app/todo_list.dart';
+import 'package:my_first_flutter_app/todo_list_selector.dart';
 
-void main() {
+void main() async {
+  WidgetsFlutterBinding.ensureInitialized();
+  await Firebase.initializeApp(options: DefaultFirebaseOptions.currentPlatform);
+
   runApp(const MyApp());
 }
 
@@ -21,7 +29,7 @@ class MyApp extends StatelessWidget {
   }
 }
 
-class MyHomePage extends StatelessWidget {
+class MyHomePage extends StatefulWidget {
   const MyHomePage({
     Key? key,
     required this.title,
@@ -29,48 +37,71 @@ class MyHomePage extends StatelessWidget {
 
   final String title;
 
-  final TodoList todolist = const TodoList(
-    name: 'Workshop',
-    todos: [
-      Todo(
-        uid: 'uid',
-        name: 'App schreiben',
-        description: 'Ich muss supda dupa App schreiben!!!!',
-      ),
-      Todo(
-        uid: 'uid2',
-        name: 'App verbessern',
-        description: 'NFTs einbauen?',
-      ),
-      Todo(
-        uid: 'uid3',
-        name: 'Kaffee trinken',
-        description: 'Das sollte immer Prio haben',
-      ),
-    ],
-  );
+  @override
+  State<MyHomePage> createState() => _MyHomePageState();
+}
+
+class _MyHomePageState extends State<MyHomePage> {
+  final TodoRepository repository = FirestoreTodoRepository();
+  String? _todoList;
+
+  @override
+  void initState() {
+    super.initState();
+    repository.createTodoList('Workshop');
+  }
 
   // Name nicht scrollable
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: Text(title),
+        title: Text(widget.title),
       ),
-      body: Column(
-        children: [
-          Text(
-            todolist.name,
-            style: Theme.of(context).textTheme.headline3,
-          ),
-          Flexible(
-            child: ListView(
-              shrinkWrap: true,
-              children: todolist.todos.map((todo) => TodoTile(todo: todo)).toList(),
-            ),
-          ),
-        ],
+      body: StreamBuilder<List<String>>(
+        stream: repository.streamTodoLists(),
+        builder: (context, snapshot) {
+          if (_todoList == null || !(snapshot.data?.contains(_todoList) ?? false)) {
+            _todoList = snapshot.data?.first;
+          }
+          return Column(
+            children: [
+              TodoListSelector(
+                lists: snapshot.data ?? [],
+                currentList: _todoList,
+                onChanged: (s) {
+                  setState(() {
+                    _todoList = s;
+                  });
+                },
+              ),
+              if (_todoList != null)
+                Flexible(
+                  child: TodoListView(
+                    repository: repository,
+                    todoList: _todoList!,
+                  ),
+                ),
+            ],
+          );
+        },
       ),
+      floatingActionButton: _todoList != null
+          ? FloatingActionButton(
+              onPressed: () {
+                Navigator.of(context).push(
+                  MaterialPageRoute(
+                    builder: (_) => CreateTodoPage(
+                      repository: repository,
+                      todoList: _todoList!,
+                    ),
+                    fullscreenDialog: true,
+                  ),
+                );
+              },
+              child: const Icon(Icons.add),
+            )
+          : null,
     );
   }
 }
