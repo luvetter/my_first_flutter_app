@@ -1,3 +1,19 @@
+- [Aufgabe 1: Startet die App](#aufgabe-1--startet-die-app)
+- [Aufgabe 2: Todo-Liste anzeigen](#aufgabe-2--todo-liste-anzeigen)
+    * [2.1 Ein Todo anzeigen](#21-ein-todo-anzeigen)
+    * [2.2 Mehrere Todos anzeigen](#22-mehrere-todos-anzeigen)
+    * [2.3 Todo-liste mit Namen](#23-todo-liste-mit-namen)
+- [Aufgabe 3 Todos hinzufügen](#aufgabe-3-todos-hinzuf-gen)
+    * [3.1 Todo in unsere TodoList-Entity hinzufügen](#31-todo-in-unsere-todolist-entity-hinzuf-gen)
+    * [3.2 TodoList-Entity aus State auslagern](#32-todolist-entity-aus-state-auslagern)
+    * [3.3 Liste reaktive bei neuem Todo aktualisieren](#33-liste-reaktive-bei-neuem-todo-aktualisieren)
+    * [3.4 Eigene Seite um neues Todo zu erstellen](#34-eigene-seite-um-neues-todo-zu-erstellen)
+    * [3.5 Zwischen verschiedenen Todo-Listen wechseln](#35-zwischen-verschiedenen-todo-listen-wechseln)
+    * [3.6 Auf Firebase-DB wechseln](#36-auf-firebase-db-wechseln)
+- [Aufgabe 4 Löschen](#aufgabe-4-l-schen)
+- [Weitere Schritte](#weitere-schritte)
+
+
 # Aufgabe 1: Startet die App
 
 In VS-Code:
@@ -311,6 +327,8 @@ dies seinem Child (unserem ListView) mitteilen:
 
 # Aufgabe 3 Todos hinzufügen
 
+## 3.1 Todo in unsere TodoList-Entity hinzufügen
+
 Wir wollen über einen Button neuer (zufällige) Todos anlegen. Dafür fügen wir unserm Scaffold einen Floating-Action-Button hinzu. Damit dieser 
 unser Widget aber aktualisieren kann, müssen wir daraus ein StatefullWidget machen und dem Button sagen, dass er die setState-Methode aufrufen muss:
 ```dart
@@ -326,9 +344,19 @@ unser Widget aber aktualisieren kann, müssen wir daraus ein StatefullWidget mac
         }),
 ```
 
-manulles update
-```dart
 
+## 3.2 TodoList-Entity aus State auslagern
+
+Wir halten unsere Todo-Liste aber meistens nicht direkt im State des Widgets, sondern in einer externen Resource (Dateisystem, lokale / externe DB, 
+REST-Services, ...). Zusätzlich bietet es sich an den Zugriff auf diese Resource hinter einem Service/Controller/Repository zu kapseln. In unserem
+Fall haben wir ein TodoRepository angelegt und verwenden im ersten Schritt eine In-Memory-Implementierung davon. 
+
+Wir fügen unserem State also das Repository zu und anstelle der TodoList-Entity merken wir uns jetzt einfach den Namen der Todo-Liste die uns interessiert.
+Die Todos für unsere Liste bekommen wir nun über die findTodos-Methode unseres Repositorys und das Erzeugen eines neuen Todos wird mit createTodo gemacht.
+Da es sich aber um eine In-Memory-Implementierung handled, ist diese zum Start der App allerdings leer und es gibt noch gar keine Todo-Liste zu der
+wir Todos hinzufügen können. Die Lösung dafür ist, die initState-Methode zu überschreiben und in dieser unsere Todo-liste zu erzeugen.
+
+```dart
 class _MyHomePageState extends State<MyHomePage> {
   final TodoRepository repository = InMemTodoRepository();
   final _todoList = 'Workshop';
@@ -379,7 +407,24 @@ class _MyHomePageState extends State<MyHomePage> {
 }
 ```
 
-streambuilder
+## 3.3 Liste reaktive bei neuem Todo aktualisieren
+
+Wenn wir die Todos nun wirklich in eine externen Resource speichern würden und jedes Gerät seine eigene Liste pflegt, würde das Widget so auch schon
+ausreichend funktionieren. Oft wollen wir aber Daten zwischen Geräten des Nutzers oder auch zwischen Nutzern teilen und auch Updates sehen, die nicht
+auf dem aktuellen Gerät gemacht wurden. Abhängig von unserem Use-Case können wir dem Nutzer einen Button anbieten mit der er selber entscheidet, wann
+wir die Liste aktualisieren. Aber manchmal sollen die Daten automatisch, ohne User zu tun, aktualisiert werden. Wir könnten in unserem State einen
+Timer einbauen, der periodisch setState aufruft. Wir könnten dabei auch prüfen ob sich die Liste wirklich geändert hat, um nur dann setState aufzurufen
+und die build-Methode nicht zu oft zu durchlaufen. 
+
+Flutter bietet uns allerdings den StreamBuilder an, der uns erlaubt diese "Update-Wenn-Logik" aus unserm eigenen Widget zu entfernen, was einem z.b. erlaubt
+von REST-Aufrufen auf Push-Nachrichten zu wechseln, ohne das das Widget angepasst werden muss. 
+
+Ein StreamBuilder reagiert auf Events von einem Stream, das können Daten-Events, Error-Events oder ein Close-Event sein und aktualisiert, dann das
+Widget für das er verantwortlich ist. In unserem Fall soll er unser ListView mit der aktuellen Liste von Todos updaten. Dafür setzten wir in dem
+Aufbau einen StreamBuilder zwischen das Flexible (das muss immer das direkt Child der Column bleiben) und dem ListView und holen über streamTodos
+aus dem Repository den passenden Stream. Zusätzlich entfernen wir das setState aus unserem FloatingActionButton (wir behalten nur natürlich das 
+createTodo) und könnten nun aus unserem Widget wieder ein StatelessWidget machen.
+
 ```dart
   // Name nicht scrollable
   @override
@@ -427,7 +472,80 @@ streambuilder
   }
 ```
 
-Liste mit StreamLBuilder als eigenes Widget rausziehen
+Um unseren Widget-Tree hier übersichtlicher zu halten, ziehen wir StreamBuilder in eine eigene Klasse raus, der wir das Repository und das 
+den Namen der Todo-Liste übergeben.
+
+```dart
+  // Name nicht scrollable
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      appBar: AppBar(
+        title: Text(widget.title),
+      ),
+      body: StreamBuilder<List<String>>(
+        stream: repository.streamTodoLists(),
+        builder: (context, snapshot) {
+          return Column(
+            children: [
+              Text(
+                _todoList,
+                style: Theme.of(context).textTheme.headline3,
+              ),
+              Flexible(
+                child: TodoListView(
+                  repository: repository,
+                  todoList: _todoList!,
+                ),
+              ),
+            ],
+          );
+        },
+      ),
+      floatingActionButton: FloatingActionButton(
+              onPressed: () {
+                var faker = Faker();
+                repository.createTodo(
+                  list: _todoList!,
+                  name: faker.lorem.sentence(),
+                  description: faker.lorem.sentence(),
+                );
+              },
+              child: const Icon(Icons.add),
+      ),
+    );
+  }
+```
+
+## 3.4 Eigene Seite um neues Todo zu erstellen
+
+Uns fehlt noch die Möglichkeit den Namen und die Beschreibung unserer Todos selber eingeben zu können. Dafür öffnen wir die CreateTodoPage als neue
+Seite. Die CreateTodoPage enthält zwei Textfelder und einen Button um aus diesen ein Todo zu machen. 
+
+Wir öffnen diese Seite in dem wir uns mit Navigator.of(context) den aktuellen Navigator holen und ihm sagen, dass wir eine neue Route pushen. Die
+MaterialPageRoute wird uns von flutter als Route-Implementierung angeboten und reicht für die meisten Fälle auch aus. In unserem FloatingActionButton
+ersetzen wir das Erzeugen eines Todos durch das Pushen einer MaterialPageRoute mit unserer CreateTodoPage als eigentliches Widget. Durch das Flag
+fullscreenDialog erkennt die CreateTodoPage, dass sie oben links ein X anzeigen soll, um zu unserer Liste zurückzukehren, ansonsten ein <- angezeigt 
+werden.
+
+```dart
+      floatingActionButton: FloatingActionButton(
+              onPressed: () {
+                Navigator.of(context).push(
+                  MaterialPageRoute(
+                    builder: (_) => CreateTodoPage(
+                      repository: repository,
+                      todoList: _todoList!,
+                    ),
+                    fullscreenDialog: true,
+                  ),
+                );
+              },
+              child: const Icon(Icons.add),
+            ),
+```
+
+## 3.5 Zwischen verschiedenen Todo-Listen wechseln
 
 ```dart
   // Name nicht scrollable
@@ -464,36 +582,45 @@ Liste mit StreamLBuilder als eigenes Widget rausziehen
       ),
       floatingActionButton: _todoList != null
           ? FloatingActionButton(
-              onPressed: () {
-                var faker = Faker();
-                repository.createTodo(
-                  list: _todoList!,
-                  name: faker.lorem.sentence(),
-                  description: faker.lorem.sentence(),
-                );
-              },
-              child: const Icon(Icons.add),
-            )
+                onPressed: () {
+                  Navigator.of(context).push(
+                    MaterialPageRoute(
+                      builder: (_) => CreateTodoPage(
+                        repository: repository,
+                        todoList: _todoList!,
+                      ),
+                      fullscreenDialog: true,
+                    ),
+                  );
+                },
+                child: const Icon(Icons.add),
+              )
           : null,
     );
   }
 ```
 
+## 3.6 Auf Firebase-DB wechseln
+
+Nun wollen wir von unserem In-Memory-Speicher auf Firebase als Cloud-Storage wechseln. In unserem Widget müssen wir nur auf das FirestoreTodoRepository
+wechseln. Firebase muss aber beim Start der App initialisiert werden, daher müssen wir unsere main-Methode etwas anpassen:
 ```dart
-      floatingActionButton: _todoList != null
-          ? FloatingActionButton(
-              onPressed: () {
-                Navigator.of(context).push(
-                  MaterialPageRoute(
-                    builder: (_) => CreateTodoPage(
-                      repository: repository,
-                      todoList: _todoList!,
-                    ),
-                    fullscreenDialog: true,
-                  ),
-                );
-              },
-              child: const Icon(Icons.add),
-            )
-          : null,
+void main() async {
+  WidgetsFlutterBinding.ensureInitialized();
+  await Firebase.initializeApp(options: DefaultFirebaseOptions.currentPlatform);
+
+  runApp(const MyApp());
+}
 ```
+
+# Aufgabe 4 Löschen
+
+# Weitere Schritte
+
+Wie könnte man weiter machen?
+- Weitere Todo-Listen anlegen
+- Status für Todos (in Arbeit / Todo)
+- Bearbeiter / Ersteller
+- Todos bearbeiten
+
+Generell Fehlerhandling und automatisierte Tests
