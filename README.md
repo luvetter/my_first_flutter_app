@@ -547,6 +547,11 @@ werden.
 
 ## 3.5 Zwischen verschiedenen Todo-Listen wechseln
 
+Um zwischen verschiedenen Todo-Listen wechseln zu können und direkt mitzubekommen, dass es eine neue gibt, wrappen wir unser Column in einen
+weiteren StreamBuilder der auf den Stream der verfügbaren Todo-Listen lauscht. Das Text-Widget mit dem Title der Todo-Liste tauschen wir duch
+unser eigenes Widget TodoListSelector aus, das als Callback ein setState mit der geänderten Liste bekommt.
+Der TodoListSelector kapselt einen Dropdownbutton mit der Nutzer die ausgewählte Liste ändern kann.
+
 ```dart
   // Name nicht scrollable
   @override
@@ -615,6 +620,9 @@ void main() async {
 
 # Aufgabe 4 Löschen
 
+Um ein Löschen per Slide-Geste zu ermöglichen, wrappen wir jedes Element unsere Liste in ein Dismissible und geben als Callback, an das 
+entsprechende Todo zu löschen
+
 # Weitere Schritte
 
 Wie könnte man weiter machen?
@@ -622,5 +630,5 @@ Wie könnte man weiter machen?
 - Status für Todos (in Arbeit / Todo)
 - Bearbeiter / Ersteller
 - Todos bearbeiten
-
-Generell Fehlerhandling und automatisierte Tests
+- Generell Fehlerhandling und automatisierte Tests
+- CI/CD
