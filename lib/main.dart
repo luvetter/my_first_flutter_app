@@ -14,7 +14,7 @@ class MyApp extends StatelessWidget {
   // This widget is the root of your application.
   @override
   Widget build(BuildContext context) {
-    return const MaterialApp(
+    return MaterialApp(
       title: "Todo's",
       home: MyHomePage(title: "Todo's"),
     );
@@ -22,15 +22,16 @@ class MyApp extends StatelessWidget {
 }
 
 class MyHomePage extends StatelessWidget {
-  const MyHomePage({
+  MyHomePage({
     Key? key,
     required this.title,
   }) : super(key: key);
 
   final String title;
 
-  final TodoList todolist = const TodoList(
+  final TodoList todolist = TodoList(
     name: 'Workshop',
+    uid: '',
     todos: [
       Todo(
         uid: 'uid',
